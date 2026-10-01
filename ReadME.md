@@ -68,8 +68,11 @@ openocd -f <板级配置>.cfg -c "program cmake-build-debug/STM32.elf verify res
 | OpenOCD 0.12.0 + 板级配置 | ✅ 完成 |
 | 编译产出 `.elf` / `.hex` / `.bin` | ✅ 验证通过 |
 | ST-Link 驱动 + USB 稳定性 | ✅ 完成 |
+| **SWD 连接芯片** | ✅ **已打通**（`SWD DPIDR 0x1ba01477` / `Cortex-M3 detected`） |
+| **烧录跑通（点亮板载 LED）** | ✅ **已完成**（`wrote 3788 bytes` + `verified 3788 bytes`） |
 | Git 仓库 + `.gitignore` | ✅ 完成 |
-| **烧录跑通（点亮板载 LED）** | 🔄 **进行中**（SWD 连接待解决） |
+
+> 芯片核实：`device id = 0x00006410`（STM32F10x 中容量）、`flash size = 64 KiB` —— 与 STM32F103C8 规格一致。
 
 ---
 
@@ -161,23 +164,71 @@ openocd -f <板级配置>.cfg -c "program cmake-build-debug/STM32.elf verify res
 - **原因**：ST-Link V2 是 USB 1.1 全速设备，接在扩展坞上要经过三级 USB Hub，链路读不出描述符
 - **解决**：从扩展坞拔下，**直插机身 USB 口**（优先 USB 2.0 口），中间不经任何 Hub/延长线
 
-### 6. SWD 连不上芯片（`STLINK_JTAG_GET_IDCODE_ERROR`）
+### 6. SWD 连不上芯片（`STLINK_JTAG_GET_IDCODE_ERROR`）—— **已解决**
 
 - **现象**：
   ```
   Info : STLINK V2J37S7 (API v2) VID:PID 0483:3748   ← ST-Link 已打开
-  Info : Target voltage: 3.240000                     ← 板子有电
-  Error: STLINK_JTAG_GET_IDCODE_ERROR                 ← 读不到芯片 ID
+  Info : Target voltage: 3.240000                     ← 有电压读数
+  Error: STLINK_JTAG_GET_IDCODE_ERROR                 ← 但读不到芯片 ID
+  Error: init mode failed (unable to connect to the target)
   ```
 - **排查过程**：
-  - 降速到 100kHz / 10kHz / 5kHz 全部失败 → **排除速率与时序问题**
-  - `reset_config none` / `srst_only` 均失败 → 排除复位线配置
+  - 降速到 100kHz / 10kHz / 5kHz、1kHz 全部失败 → **排除速率与时序问题**
+  - `reset_config none` / `srst_only` / `connect_assert_srst` 均失败 → 排除复位线配置
+    （注：`stm32f1.cfg` 用的是 `reset_config none separate`，未接 RST 线，所以这类参数本就无效）
   - 连续 5 次连接 **0/5 成功** → 属「**系统性接线错误**」而非接触不良
     （判定法：偶发成功是接触不良；稳定失败是接错线）
-- **当前定位**：`Target voltage` 正常说明 3V3 与 GND 是通的，问题压缩到 **SWDIO / SWCLK 两根线**
-- **下一步**：核对接线定义（不同厂家板子的 SWD 排针丝印顺序不同：
-  有的是 `3V3 DIO CLK GND`，有的是 `GND CLK DIO 3V3`，必须看板子印的字），
-  并确认 BOOT0 跳线帽处于正确位置
+  - **决定性实验 ——「按住 RESET 连接」**：复位期间 CPU 不执行任何用户程序，SWD 必然是干净的。
+    按住板载 RESET 键连跑 8 次，**8/8 全部失败** → 据此**排除**「固件把 PA13/PA14 重映射成普通 IO」，锁定为纯接线问题
+- **根因：杜邦线接线顺序错**
+  - **ST-Link V2 的 2×5 排针分两列，定义不同**：
+    左列 `RST / SWIM / GND / 3.3V / 5.0V`；右列 `SWCLK / SWDIO / GND / 3.3V / 5.0V`（必须用右列）
+    两列外观完全一样，插错列则 SWCLK→RST、SWDIO→SWIM，而 GND 与 3.3V 恰好都对
+    → 症状正好是「有电压、但读不到芯片」
+  - **两端顺序不同**：Blue Pill 的 4 针 SWD 顺序为 `3V3 → SWDIO → SWCLK → GND`，
+    而 ST-Link 右列（第 2/4/6/8 脚）为 `SWCLK → SWDIO → GND → 3.3V`
+    → **用一根 4 芯排线整根直插，物理上不可能同时接对**；把一端转 180° 也不行（反转后中间两针仍错位）
+- **解决**：**拆成 4 根独立杜邦线，按信号名一根一根对应接**，而不是整根排线直插。
+  接好后再测，一次成功：
+  ```
+  Info : SWD DPIDR 0x1ba01477
+  Info : [stm32f1x.cpu] Cortex-M3 r1p1 processor detected
+  Info : [stm32f1x.cpu] target has 6 breakpoints, 4 watchpoints
+  Info : [stm32f1x.cpu] Examination succeed
+  ```
+- **正确的接线对照（按信号名）**：
+
+  | 信号 | ST-Link 那一端 | 板子那一端 |
+  |---|---|---|
+  | 供电 3.3V | `3.3V`（第 7 或 8 脚） | `3V3` |
+  | 数据 | `SWDIO`（第 4 脚） | `SWDIO`（也可能印成 `DIO`） |
+  | 时钟 | `SWCLK`（第 2 脚） | `SWCLK`（也可能印成 `CLK`） |
+  | 地线 | `GND`（第 5 或 6 脚） | `GND` |
+
+- **一个重要提醒**：`Target voltage` 读数**不能**作为接线正确的证据 —— 当目标板由 ST-Link 的 3.3V 脚供电时，该读数是 ST-Link 自己 3.3V 轨的测量值，与板子侧接线无关。
+
+### 7. 烧录成功后 LED 不亮（现象与代码不符）
+
+- **现象**：烧录成功、校验通过，但板载 LED 无反应
+- **原因**：原工程是 CubeMX 生成的**空模板** —— `MX_GPIO_Init()` 只使能了 GPIOC/GPIOD/GPIOA 的时钟，**没有配置任何引脚**，`while(1)` 里也是空的，所以没有可观察的现象
+- **解决**：在 `main.c` 里补上点灯代码（这也是实验 1 的第一步）：
+  ```c
+  /* USER CODE BEGIN 2 */
+  GPIO_InitTypeDef LED_InitStruct = {0};
+  LED_InitStruct.Pin   = GPIO_PIN_13;
+  LED_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+  LED_InitStruct.Pull  = GPIO_NOPULL;
+  LED_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &LED_InitStruct);
+  /* USER CODE END 2 */
+
+  /* USER CODE BEGIN 3 */
+  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+  HAL_Delay(500);
+  /* USER CODE END 3 */
+  ```
+  **注意**：这块 Blue Pill 的板载 LED 接在 **PC13 且为低电平点亮（active-low）**。
 
 ---
 

@@ -87,7 +87,14 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
-
+  /* ---- 全链路验证：板载 LED 闪烁 ---- */
+  /* 这块 Blue Pill 的板载 LED 接在 PC13，且是低电平点亮（active-low） */
+  GPIO_InitTypeDef LED_InitStruct = {0};
+  LED_InitStruct.Pin   = GPIO_PIN_13;
+  LED_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;   /* 推挽输出 */
+  LED_InitStruct.Pull  = GPIO_NOPULL;
+  LED_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &LED_InitStruct);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -97,6 +104,9 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    /* ---- 全链路验证：每 500ms 翻转一次 PC13 ---- */
+    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+    HAL_Delay(500);
   }
   /* USER CODE END 3 */
 }
