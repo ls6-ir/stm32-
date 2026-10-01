@@ -1,0 +1,89 @@
+# ========================================
+# STM32 + CLion 工程 .gitignore
+# 南海鲨电控组培训作业 · 张俊宏
+# ========================================
+
+# ---------- CMake 构建产物 ----------
+# 注意：不要忽略 CMakeLists.txt / *.cmake（那是源码，必须提交）
+cmake-build-*/
+build/
+cmake-build-debug/
+cmake-build-release/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# ---------- 编译中间产物 ----------
+*.o
+*.obj
+*.a
+*.su
+*.d
+*.crf
+*.dep
+*.lnp
+*.map
+*.lst
+
+# ---------- 最终固件 ----------
+# 说明：作业要求提交「完整工程」，固件由源码编译得出，
+# 不必提交；但如果你想在仓库里直接放一份可烧录文件给人看，
+# 把下面三行的注释去掉即可。
+*.elf
+*.hex
+*.bin
+*.axf
+*.s19
+*.srec
+
+# ---------- CLion / JetBrains ----------
+# .idea 下有些文件要保留（modules.xml、misc.xml 等），
+# 只忽略明显是本地状态的：
+.idea/workspace.xml
+.idea/editor.xml
+.idea/shelf/
+.idea/usage.statistics.xml
+.idea/tasks.xml
+.idea/dictionaries/
+.idea/*.iml
+.idea/.name
+
+# ---------- Eclipse / STM32CubeIDE 残留 ----------
+# 工程里带了 .cproject / .project / .settings（CubeMX 生成的兼容文件）。
+# 这些是工具生成的，保留不影响，如果觉得乱可以取消下面注释：
+# .cproject
+# .project
+# .settings/
+
+# ---------- CubeMX 生成文件 ----------
+# .mxproject 记录的是上次生成的配置，建议保留（便于复现）
+# 如果你不想提交，取消下面注释：
+# .mxproject
+
+# ---------- 编译器 / 调试器输出 ----------
+*.out
+*.map
+*.dmp
+*.log
+Debug/
+Release/
+*.Debug
+*.Release
+
+# ---------- 编辑器与系统文件 ----------
+.vscode/
+*.swp
+*.swo
+*~
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ---------- 临时文件 ----------
+*.tmp
+*.bak
+*.orig
+*.rej
+*.old
